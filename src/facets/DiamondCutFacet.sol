@@ -1,12 +1,15 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {IDiamondCut} from "../interfaces/IDiamondCut.sol";
-import {AppStorage, LibAppStorage} from "../libraries/LibAppStorage.sol";
+/******************************************************************************\
+* Author: Nick Mudge <nick@perfectabstractions.com> (https://twitter.com/mudgen)
+* EIP-2535 Diamonds: https://eips.ethereum.org/EIPS/eip-2535
+/******************************************************************************/
+
+import { IDiamondCut } from "../interfaces/IDiamondCut.sol";
+import { LibDiamond } from "../libraries/LibDiamond.sol";
 
 contract DiamondCutFacet is IDiamondCut {
-    AppStorage internal s;
-
     /// @notice Add/replace/remove any number of functions and optionally execute
     ///         a function with delegatecall
     /// @param _diamondCut Contains the facet addresses and function selectors
@@ -18,8 +21,7 @@ contract DiamondCutFacet is IDiamondCut {
         address _init,
         bytes calldata _calldata
     ) external override {
-        LibAppStorage.enforceIsContractOwner();
-        LibAppStorage.diamondCut(_diamondCut, _init, _calldata);
+        LibDiamond.enforceIsContractOwner();
+        LibDiamond.diamondCut(_diamondCut, _init, _calldata);
     }
 }
-
