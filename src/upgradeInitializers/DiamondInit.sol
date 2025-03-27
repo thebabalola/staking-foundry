@@ -1,31 +1,55 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {LibDiamond} from "../libraries/LibDiamond.sol";
-import {LibAppStorage, AppStorage} from "../libraries/LibAppStorage.sol"; // Added AppStorage import
-import {IDiamondLoupe} from "../interfaces/IDiamondLoupe.sol";
-import {IDiamondCut} from "../interfaces/IDiamondCut.sol";
-import {IERC173} from "../interfaces/IERC173.sol";
-import {IERC165} from "../interfaces/IERC165.sol";
+import "../libraries/LibAppStorage.sol";
+import "../libraries/LibDiamond.sol";
+import "../interfaces/IDiamondLoupe.sol";
+import "../interfaces/IERC173.sol";
+import "../interfaces/IERC165.sol";
 
 contract DiamondInit {
-    function init() external {
-        // Initialize Diamond storage
-        LibDiamond.DiamondStorage storage ds = LibDiamond.diamondStorage();
+    AppStorage internal s;
+    
+    struct Args {
+        string name;
+        string symbol;
+        uint8 decimals;
+        uint256 initialSupply;
+        address initialSupplyRecipient;
+        uint256 rewardRate;
+        uint256 decayRate;
+        uint256 minimumStakingPeriod;
+    }
+    
+    function init(Args memory _args) external {
+        // Initialize ERC20 token properties
+        s.name = _args.name;
+        s.symbol = _args.symbol;
+        s.decimals = _args.decimals;
+        
+        // Mint initial supply
+        if (_args.initialSupply > 0) {
+            address recipient = _args.initialSupplyRecipient;
+            if (recipient == address(0)) {
+                recipient = msg.sender;
+            }
+            s.totalSupply = _args.initialSupply;
+            s.balances[recipient] = _args.initialSupply;
+        }
+        
+        // Initialize staking properties
+        s.rewardRate = _args.rewardRate;
+        s.decayRate = _args.decayRate;
+        s.minimumStakingPeriod = _args.minimumStakingPeriod;
+        
+        // Initialize contract owner
+        s.contractOwner = msg.sender;
+        
+        // Add ERC165 data
+        DiamondStorage storage ds = LibDiamond.diamondStorage();
         ds.supportedInterfaces[type(IERC165).interfaceId] = true;
-        ds.supportedInterfaces[type(IDiamondCut).interfaceId] = true;
         ds.supportedInterfaces[type(IDiamondLoupe).interfaceId] = true;
         ds.supportedInterfaces[type(IERC173).interfaceId] = true;
-
-        // Initialize AppStorage
-        AppStorage storage s = LibAppStorage.diamondStorage();
-        s.name = "Diamond Reward Token";
-        s.symbol = "DRT";
-        s.decimals = 18;
-        
-        // Initialize staking parameters
-        s.rewardRate = 1e16; // 0.01 tokens per second per staked token
-        s.decayRate = 1e14; // 0.01% decay per second
-        s.lastUpdateTime = block.timestamp;
     }
 }
+

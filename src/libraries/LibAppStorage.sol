@@ -1,106 +1,70 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-/**
- * @title Stake
- * @dev Struct to track staking information
- */
-struct Stake {
+import "../interfaces/IERC20.sol";
+import "../interfaces/IERC721.sol";
+import "../interfaces/IERC1155.sol";
+import "./LibDiamond.sol"; // Import LibDiamond instead of defining it here
+
+// Staking related structs
+struct StakedERC20 {
+    address tokenAddress;
     uint256 amount;
-    uint256 timestamp;
+    uint256 stakedAt;
 }
 
-/**
- * @title AppStorage
- * @dev Central storage layout for the diamond contract using EIP-2535 Diamond Standard
- */
+struct StakedERC721 {
+    address tokenAddress;
+    uint256 tokenId;
+    uint256 stakedAt;
+}
+
+struct StakedERC1155 {
+    address tokenAddress;
+    uint256 tokenId;
+    uint256 amount;
+    uint256 stakedAt;
+}
+
+// App storage
 struct AppStorage {
-    // ============ ERC20 ============
+    // Diamond token (ERC20) properties
     string name;
     string symbol;
     uint8 decimals;
     uint256 totalSupply;
     mapping(address => uint256) balances;
     mapping(address => mapping(address => uint256)) allowances;
-
-    // ============ ERC721 ============
-    mapping(address => uint256) erc721Balances;
-    mapping(uint256 => address) erc721Owners;
-    mapping(address => mapping(address => bool)) erc721OperatorApprovals;
-    mapping(uint256 => address) erc721TokenApprovals;
-
-    // ============ ERC1155 ============
-    mapping(address => mapping(uint256 => uint256)) erc1155Balances;
-    mapping(address => mapping(address => bool)) erc1155OperatorApprovals;
     
-    // ============ Staking ============
-    // ERC20 Staking
-    mapping(address => mapping(address => uint256)) erc20Stakes;
+    // Staking properties
+    uint256 rewardRate; // Rewards per second per token staked
+    uint256 decayRate; // Rate at which rewards decrease over time (in basis points)
+    uint256 minimumStakingPeriod; // Minimum time tokens must be staked (in seconds)
     
-    // ERC721 Staking
-    mapping(address => mapping(address => mapping(uint256 => Stake))) erc721Stakes;
-    mapping(address => mapping(address => uint256[])) erc721StakedTokens;
+    // ERC20 staking
+    mapping(address => StakedERC20[]) stakedERC20s;
+    mapping(address => uint256) totalERC20StakedByUser;
+    mapping(address => uint256) erc20RewardDebt;
     
-    // ERC1155 Staking
-    mapping(address => mapping(address => mapping(uint256 => Stake))) erc1155Stakes;
-    mapping(address => mapping(address => uint256[])) erc1155StakedTokens;
-
-    // ============ Rewards ============
-    uint256 rewardRate;
-    uint256 decayRate;
-    uint256 lastUpdateTime;
-    uint256 rewardPerTokenStored;
-    mapping(address => uint256) userRewardPerTokenPaid;
-    mapping(address => uint256) rewards;
-    mapping(address => uint256) rewardStartTime;
+    // ERC721 staking
+    mapping(address => StakedERC721[]) stakedERC721s;
+    mapping(address => uint256) totalERC721StakedByUser;
+    mapping(address => uint256) erc721RewardDebt;
     
-    // ============ Admin ============
-    address feeCollector;
-    uint256 stakingFee;
-    mapping(address => bool) whitelistedTokens;
+    // ERC1155 staking
+    mapping(address => StakedERC1155[]) stakedERC1155s;
+    mapping(address => uint256) totalERC1155StakedByUser;
+    mapping(address => uint256) erc1155RewardDebt;
+    
+    // Contract owner
+    address contractOwner;
 }
 
-/**
- * @title LibAppStorage
- * @dev Library for accessing the AppStorage struct in a deterministic location
- */
 library LibAppStorage {
-    // Constant string for storage position calculation
-     bytes32 constant APP_STORAGE_POSITION = keccak256("diamond.standard.app.storage");
-
     function diamondStorage() internal pure returns (AppStorage storage ds) {
-        bytes32 position = APP_STORAGE_POSITION;
         assembly {
-            ds.slot := position
+            ds.slot := 0
         }
     }
-
-    /**
-     * @dev Initializes critical storage variables
-     */
-    function initialize() internal {
-        AppStorage storage s = diamondStorage();
-        require(s.lastUpdateTime == 0, "Already initialized");
-        
-        // Default reward parameters
-        s.rewardRate = 1e16; // 0.01 tokens per second per staked token
-        s.decayRate = 1e14; // 0.01% decay per second
-        s.lastUpdateTime = block.timestamp;
-        
-        // Default fee settings
-        s.feeCollector = msg.sender;
-        s.stakingFee = 5e16; // 5% fee
-    }
-
-    /**
-     * @dev Updates reward parameters safely
-     */
-    function updateRewardParameters(uint256 newRate, uint256 newDecay) internal {
-        AppStorage storage s = diamondStorage();
-        require(newDecay <= 1e18, "Decay rate too high");
-        
-        s.rewardRate = newRate;
-        s.decayRate = newDecay;
-        s.lastUpdateTime = block.timestamp;
-    }
 }
+
