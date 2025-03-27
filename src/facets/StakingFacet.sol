@@ -8,6 +8,7 @@ import "../libraries/LibAppStorage.sol";
 import "../libraries/LibDiamond.sol";
 
 contract StakingFacet {
+    using LibAppStorage for AppStorage;
     AppStorage internal s;
     
     event StakedERC20(address indexed user, address indexed token, uint256 amount);
@@ -31,7 +32,15 @@ contract StakingFacet {
         updateReward(msg.sender);
         
         IERC721(token).transferFrom(msg.sender, address(this), tokenId);
-        s.erc721Stakes[msg.sender][token][tokenId] = block.timestamp;
+        
+        // Initialize new stake
+        s.erc721Stakes[msg.sender][token][tokenId] = Stake({
+            amount: 1, // ERC721 is always 1 token
+            timestamp: block.timestamp
+        });
+        
+        // Track staked token
+        s.erc721StakedTokens[msg.sender][token].push(tokenId);
         
         emit StakedERC721(msg.sender, token, tokenId);
     }
@@ -41,7 +50,16 @@ contract StakingFacet {
         updateReward(msg.sender);
         
         IERC1155(token).safeTransferFrom(msg.sender, address(this), tokenId, amount, "");
-        s.erc1155Stakes[msg.sender][token][tokenId] += amount;
+        
+        // Update or initialize stake
+        Stake storage stake = s.erc1155Stakes[msg.sender][token][tokenId];
+        stake.amount += amount;
+        stake.timestamp = block.timestamp;
+        
+        // Track staked token if new
+        if (stake.amount == amount) {
+            s.erc1155StakedTokens[msg.sender][token].push(tokenId);
+        }
         
         emit StakedERC1155(msg.sender, token, tokenId, amount);
     }
@@ -58,8 +76,19 @@ contract StakingFacet {
     }
     
     function unstakeERC721(address token, uint256 tokenId) external {
-        require(s.erc721Stakes[msg.sender][token][tokenId] > 0, "Not staked");
+        Stake storage stake = s.erc721Stakes[msg.sender][token][tokenId];
+        require(stake.amount > 0, "Not staked");
         updateReward(msg.sender);
+        
+        // Remove from staked tokens array
+        uint256[] storage stakedTokens = s.erc721StakedTokens[msg.sender][token];
+        for (uint256 i = 0; i < stakedTokens.length; i++) {
+            if (stakedTokens[i] == tokenId) {
+                stakedTokens[i] = stakedTokens[stakedTokens.length - 1];
+                stakedTokens.pop();
+                break;
+            }
+        }
         
         delete s.erc721Stakes[msg.sender][token][tokenId];
         IERC721(token).transferFrom(address(this), msg.sender, tokenId);
@@ -69,10 +98,25 @@ contract StakingFacet {
     
     function unstakeERC1155(address token, uint256 tokenId, uint256 amount) external {
         require(amount > 0, "Cannot unstake 0");
-        require(s.erc1155Stakes[msg.sender][token][tokenId] >= amount, "Not enough staked");
+        Stake storage stake = s.erc1155Stakes[msg.sender][token][tokenId];
+        require(stake.amount >= amount, "Not enough staked");
         updateReward(msg.sender);
         
-        s.erc1155Stakes[msg.sender][token][tokenId] -= amount;
+        stake.amount -= amount;
+        
+        // Remove from staked tokens if fully unstaked
+        if (stake.amount == 0) {
+            uint256[] storage stakedTokens = s.erc1155StakedTokens[msg.sender][token];
+            for (uint256 i = 0; i < stakedTokens.length; i++) {
+                if (stakedTokens[i] == tokenId) {
+                    stakedTokens[i] = stakedTokens[stakedTokens.length - 1];
+                    stakedTokens.pop();
+                    break;
+                }
+            }
+            delete s.erc1155Stakes[msg.sender][token][tokenId];
+        }
+        
         IERC1155(token).safeTransferFrom(address(this), msg.sender, tokenId, amount, "");
         
         emit UnstakedERC1155(msg.sender, token, tokenId, amount);
@@ -105,16 +149,21 @@ contract StakingFacet {
         return (stakedAmount * (currentRewardPerToken - s.userRewardPerTokenPaid[account]) / 1e18) + s.rewards[account];
     }
     
-    function getTotalStaked(address account) public view returns (uint256) {
-        // This is a simplified version - in reality you'd sum up all staked tokens
-        // For brevity, we're just returning ERC20 stakes here
-        uint256 total;
-        // Add logic to sum all ERC20, ERC721, and ERC1155 stakes
-        // This would require tracking all staked tokens for each user
+    function getTotalStaked(address account) public view returns (uint256 total) {
+        // Sum ERC20 stakes
+        total += s.erc20Stakes[account][address(this)]; // Example for diamond token
+        
+        // Sum ERC721 stakes (1 per token)
+        total += s.erc721StakedTokens[account][address(this)].length;
+        
+        // Sum ERC1155 stakes
+        for (uint256 i = 0; i < s.erc1155StakedTokens[account][address(this)].length; i++) {
+            uint256 tokenId = s.erc1155StakedTokens[account][address(this)][i];
+            total += s.erc1155Stakes[account][address(this)][tokenId].amount;
+        }
         return total;
     }
     
-    // In StakingFacet.sol
     function getStakedERC721Tokens(address user, address token) external view returns (uint256[] memory) {
         return s.erc721StakedTokens[user][token];
     }

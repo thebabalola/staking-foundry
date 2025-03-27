@@ -1,19 +1,19 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "../../src/Diamond.sol";
-import "../../src/facets/DiamondCutFacet.sol";
-import "../../src/facets/DiamondLoupeFacet.sol";
-import "../../src/facets/OwnershipFacet.sol";
-import "../../src/facets/ERC20Facet.sol";
-import "../../src/facets/StakingFacet.sol";
-import "../../src/facets/RewardFacet.sol";
-import "../../src/interfaces/IERC20.sol";
-import "../../src/interfaces/IStaking.sol";
+import "src/Diamond.sol";
+import "src/facets/DiamondCutFacet.sol";
+import "src/facets/DiamondLoupeFacet.sol";
+import "src/facets/OwnershipFacet.sol";
+import "src/facets/ERC20Facet.sol";
+import "src/facets/StakingFacet.sol";
+import "src/facets/RewardFacet.sol";
+import "src/interfaces/IERC20.sol";
+import "src/interfaces/IStaking.sol";
 import "../helpers/DiamondUtils.sol";
 
 contract ERC20StakingTest is DiamondUtils {
-    Diamond diamond;
+    // Diamond diamond;
     address user1 = address(1);
     address token1 = address(2);
     uint256 initialAmount = 1000 ether;
@@ -30,9 +30,54 @@ contract ERC20StakingTest is DiamondUtils {
         mockERC20(token1, user1, initialAmount);
     }
 
-    function addFacets() internal {
-        // ... (Same facet adding logic as in previous setup)
-        // Refer to the earlier deployDiamond.t.sol implementation
+    function addFacets() internal override {
+        // Deploy all facets
+        DiamondLoupeFacet dLoupe = new DiamondLoupeFacet();
+        OwnershipFacet ownerF = new OwnershipFacet();
+        ERC20Facet erc20F = new ERC20Facet();
+        StakingFacet stakingF = new StakingFacet();
+        RewardFacet rewardF = new RewardFacet();
+
+        // Build cut struct
+        IDiamondCut.FacetCut[] memory cut = new IDiamondCut.FacetCut[](5);
+        
+        // Add DiamondLoupeFacet
+        cut[0] = IDiamondCut.FacetCut({
+            facetAddress: address(dLoupe),
+            action: IDiamondCut.FacetCutAction.Add,
+            functionSelectors: generateSelectors("DiamondLoupeFacet")
+        });
+        
+        // Add OwnershipFacet
+        cut[1] = IDiamondCut.FacetCut({
+            facetAddress: address(ownerF),
+            action: IDiamondCut.FacetCutAction.Add,
+            functionSelectors: generateSelectors("OwnershipFacet")
+        });
+        
+        // Add ERC20Facet
+        cut[2] = IDiamondCut.FacetCut({
+            facetAddress: address(erc20F),
+            action: IDiamondCut.FacetCutAction.Add,
+            functionSelectors: generateSelectors("ERC20Facet")
+        });
+        
+        // Add StakingFacet
+        cut[3] = IDiamondCut.FacetCut({
+            facetAddress: address(stakingF),
+            action: IDiamondCut.FacetCutAction.Add,
+            functionSelectors: generateSelectors("StakingFacet")
+        });
+        
+        // Add RewardFacet
+        cut[4] = IDiamondCut.FacetCut({
+            facetAddress: address(rewardF),
+            action: IDiamondCut.FacetCutAction.Add,
+            functionSelectors: generateSelectors("RewardFacet")
+        });
+        
+        // Perform diamond cut
+        IDiamondCut(address(diamond)).diamondCut(cut, address(0), "");
     }
 
     function testStakeERC20() public {

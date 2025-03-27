@@ -5,7 +5,8 @@ import "../interfaces/IERC20.sol";
 import "../libraries/LibAppStorage.sol";
 import "../libraries/LibDiamond.sol";
 import {AppStorage} from "../libraries/LibAppStorage.sol"; // Added explicit import
-import "./StakingFacet.sol"; // Added import for StakingFacet
+import "./StakingFacet.sol";
+import "../interfaces/IStaking.sol";
 import "./ERC20Facet.sol"; // Added import for ERC20Facet
 
 contract RewardFacet {
@@ -14,7 +15,7 @@ contract RewardFacet {
     event RewardClaimed(address indexed user, uint256 amount);
     
     function claimReward() external {
-        StakingFacet(address(this)).updateReward(msg.sender);
+        IStaking(address(this)).updateReward(msg.sender);
         uint256 reward = s.rewards[msg.sender];
         require(reward > 0, "No rewards to claim");
         
